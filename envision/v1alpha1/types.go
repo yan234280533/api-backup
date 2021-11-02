@@ -3,36 +3,17 @@ package v1alpha1
 import (
 	"time"
 
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	// HighestGauranteed is the highest level for guaranteed pod.
-	HighestGauranteed = int32(100000)
+	// HighestLevel is the highest level for pod.
+	HighestLevel = int32(9999)
 
-	// HighestDefinableServiceLevelForGuaranteedPod is the lowest level for guaranteed pod.
-	LowestGauranteed = int32(90000)
-
-	// HighestBurstable is the highest level for burstable pod.
-	HighestBurstable = int32(89999)
-
-	// LowestBurstable is the lowest level for burstable pod.
-	LowestBurstable = int32(10000)
-
-	// HighestDefinableServiceLevelForBestEffortPod is the highest level for bestEffort pod.
-	HighestBestEffort = int32(9999)
-
-	// LowestBestEffort is the lowest level for bestEffort pod.
-	LowestBestEffort = int32(0)
-)
-
-type Operator string
-
-const (
-	OperatorNotEqual Operator = "!="
-	OperatorGreater  Operator = ">"
-	OperatorSmaller  Operator = ">"
+	// LowestLevel is the lowest level pod.
+	LowestLevel = int32(0)
 )
 
 // URIScheme identifies the scheme used for connection to a host for Get actions
@@ -57,17 +38,24 @@ type ServiceLevelClass struct {
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec ServiceLevelSpec `json:"spec,omitempty"`
+	Spec ServiceLevelSpec `json:"spec"`
 
-	Status ServiceLevelStatus `json:"spec,omitempty"`
+	Status ServiceLevelStatus `json:"status,omitempty"`
 }
 
 type ServiceLevelSpec struct {
 	// The value of pods level. This is the actual level that pods
 	// receive when they have the name of this class in their pod evasion policy.
-	// Integer value range （0～100000), the highest level is 100000.
-	// 100000>1000>1>0
+	// Integer value range （0～10000), the highest level is 9999.
+	// The priority is PodQosValue+Value
+	// Example: pod qos guaranteed, value 11 , priority 20011
+	// Example: pod qos burstable, value 10 , priority 10010
+	// Example: pod qos bestEffort, value 19 , priority 19
 	Value int32 `json:"value"`
+
+	// The pod qos class is define the pod's qos class,which is align with k8s's pod qos class
+	// The service level value for pod qos : (guaranteed 20000, burstable 10000, bestEffort 0)
+	PodQosClass v1.PodQOSClass `json:"podQosClass"`
 
 	// Description is an arbitrary string that usually provides guidelines on
 	// when this qos level class should be used.
@@ -78,7 +66,6 @@ type ServiceLevelSpec struct {
 type ServiceLevelStatus struct {
 }
 
-// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ServiceLevelClassList contains a list of ServiceLevelClass
@@ -101,7 +88,7 @@ type EvasionActionClass struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   EvasionActionClassSpec   `json:"spec"`
-	Status EvasionActionClassStatus `json:"status"`
+	Status EvasionActionClassStatus `json:"status,omitempty"`
 }
 
 type EvasionActionClassSpec struct {
@@ -125,7 +112,6 @@ type EvasionActionClassSpec struct {
 type EvasionActionClassStatus struct {
 }
 
-// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // EvasionActionClassList contains a list of EvasionActionClass
@@ -143,7 +129,7 @@ type PodEvasionPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   PodEvasionPolicySpec   `json:"spec,omitempty"`
+	Spec   PodEvasionPolicySpec   `json:"spec"`
 	Status PodEvasionPolicyStatus `json:"status,omitempty"`
 }
 
@@ -172,7 +158,6 @@ type PodEvasionPolicyStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 }
 
-// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // PodEvasionPolicyList contains a list of PodEvasionPolicy
@@ -190,7 +175,7 @@ type NodeEvasionPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   NodeEvasionPolicySpec   `json:"spec,omitempty"`
+	Spec   NodeEvasionPolicySpec   `json:"spec"`
 	Status NodeEvasionPolicyStatus `json:"status,omitempty"`
 }
 
@@ -216,7 +201,6 @@ type NodeEvasionPolicyStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 }
 
-// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // NodeEvasionPolicyList contains a list of NodeEvasionPolicy
@@ -313,19 +297,11 @@ type HTTPHeader struct {
 }
 
 type ObjectiveEnsurance struct {
-	// MetricName is the name of the given metric
-	MetricName string `json:"metricName"`
+	// Metric identifies the target metric by name and selector
+	Metric MetricIdentifier `json:"metric"`
 
-	// Selector is the selector for the given metric
-	// it is the string-encoded form of a standard kubernetes label selector
-	// +optional
-	Selector *metav1.LabelSelector `json:"selector,omitempty"`
-
-	// TargetThreshold is the target threshold of the metric (as a quantity).
-	TargetThreshold *resource.Quantity `json:"targetThreshold"`
-
-	// Target opterator such as (">","<","!="), default (">")
-	TargetOperator Operator `json:"targetOpterator,omitempty"`
+	// Target specifies the target value for the given metric
+	Target MetricTarget `json:"target"`
 
 	// How many times the QualityObjective is reach, to trigger action
 	ReachedThreshold int32 `json:"reachedThreshold,omitempty"`
@@ -333,6 +309,46 @@ type ObjectiveEnsurance struct {
 	// Evasion action when be triggered
 	EvasionAction []string `json:"actions,omitempty"`
 }
+
+// MetricIdentifier defines the name and optionally selector for a metric
+type MetricIdentifier struct {
+	// Name is the name of the given metric
+	Name string `json:"name"`
+	// Selector is the selector for the given metric
+	// it is the string-encoded form of a standard kubernetes label selector
+	// +optional
+	Selector *metav1.LabelSelector `json:"selector,omitempty"`
+}
+
+// MetricTarget defines the target value, average value, or average utilization of a specific metric
+type MetricTarget struct {
+	// Type represents whether the metric type is Utilization, Value, or AverageValue
+	Type MetricTargetType `json:"type"`
+	// Value is the target value of the metric (as a quantity).
+	Value *resource.Quantity `json:"value,omitempty"`
+	// TargetAverageValue is the target value of the average of the
+	// metric across all relevant pods (as a quantity)
+	AverageValue *resource.Quantity `json:"averageValue,omitempty"`
+
+	// AverageUtilization is the target value of the average of the
+	// resource metric across all relevant pods, represented as a percentage of
+	// the requested value of the resource for the pods.
+	// Currently only valid for Resource metric source type
+	AverageUtilization *int32 `json:"averageUtilization,omitempty"`
+}
+
+// MetricTargetType specifies the type of metric being targeted, and should be either
+// "Value", "AverageValue", or "Utilization"
+type MetricTargetType string
+
+const (
+	// UtilizationMetricType is a possible value for MetricTarget.Type.
+	UtilizationMetricType MetricTargetType = "Utilization"
+	// ValueMetricType is a possible value for MetricTarget.Type.
+	ValueMetricType MetricTargetType = "Value"
+	// AverageValueMetricType is a possible value for MetricTarget.Type.
+	AverageValueMetricType MetricTargetType = "AverageValue"
+)
 
 type NodeQualityProbe struct {
 	Handler NodeHandler `json:",inline"`
