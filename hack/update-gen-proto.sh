@@ -11,6 +11,8 @@ set -o pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../" && pwd -P)"
 PREDICTION_V1="${ROOT}/prediction/v1alpha1"
+ENVISION_V1="${ROOT}/envision/v1alpha1"
 
 source "${ROOT}/hack/protoc.sh"
 kube::protoc::generate_proto "${PREDICTION_V1}"
+kube::protoc::generate_proto "${ENVISION_V1}"
