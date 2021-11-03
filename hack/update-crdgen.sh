@@ -12,4 +12,4 @@ source hack/util.sh
 echo "Generating with controller-gen"
 util::install_tools ${CONTROLLER_GEN_PKG} ${CONTROLLER_GEN_VER} >/dev/null 2>&1
 controller-gen crd paths=./prediction/... output:crd:dir=./artifacts/deploy
-controller-gen crd paths=./envision/... output:crd:dir=./artifacts/deploy
+controller-gen crd paths=./evasion/... output:crd:dir=./artifacts/deploy
